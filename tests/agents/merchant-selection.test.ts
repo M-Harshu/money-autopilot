@@ -1,0 +1,2 @@
+import {describe,it,expect} from "vitest"; import {merchantRecommendationSchema,validateMerchantRecommendation} from "@/lib/agents/merchant";
+describe("merchant boundary",()=>it("rejects unsupplied product",()=>{const r=merchantRecommendationSchema.parse({selected_product_id:"x",confidence:.9,expected_margin:100,decision_factors:["margin"],reason:"margin"});expect(()=>validateMerchantRecommendation(r,[{id:"p1",margin:100}])).toThrow("outside the supplied candidate set")}))

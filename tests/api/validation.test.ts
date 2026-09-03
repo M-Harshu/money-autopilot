@@ -1,0 +1,1 @@
+import {describe,it,expect} from "vitest"; import {z} from "zod"; const s=z.object({message:z.string().min(1)}); describe("API validation",()=>it("rejects malformed request",()=>expect(s.safeParse({message:42}).success).toBe(false)))

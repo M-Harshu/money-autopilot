@@ -1,0 +1,1 @@
+import {NextResponse} from "next/server"; import {prisma} from "@/lib/db/client"; export async function GET(){return NextResponse.json(await prisma.auditEvent.findMany({orderBy:{createdAt:"desc"},take:200}))}

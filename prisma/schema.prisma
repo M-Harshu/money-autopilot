@@ -1,0 +1,234 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Merchant {
+  id           String          @id @default(cuid())
+  name         String
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  products     Product[]
+  carts        Cart[]
+  orders       Order[]
+  transactions Transaction[]
+  decisions    AgentDecision[]
+  policies     Policy[]
+  auditEvents  AuditEvent[]
+}
+
+model Product {
+  id                  String         @id @default(cuid())
+  merchantId          String
+  sku                 String         @unique
+  name                String
+  brand               String
+  category            String
+  description         String
+  price               Decimal        @db.Decimal(10, 2)
+  cost                Decimal        @db.Decimal(10, 2)
+  margin              Decimal        @db.Decimal(10, 2)
+  rating              Decimal        @db.Decimal(3, 2)
+  features            Json
+  returnRisk          String
+  relevantAccessories Json
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  merchant   Merchant    @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  inventory  Inventory?
+  cartItems  CartItem[]
+  decisions  AgentDecision[]
+
+  @@index([merchantId, category])
+  @@index([category, price])
+}
+
+model Inventory {
+  id        String   @id @default(cuid())
+  productId String   @unique
+  quantity  Int
+  updatedAt DateTime @updatedAt
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+model BuyerProfile {
+  id           String          @id @default(cuid())
+  externalId   String          @unique
+  preferences  Json?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  carts        Cart[]
+  orders       Order[]
+  transactions Transaction[]
+  decisions    AgentDecision[]
+  auditEvents  AuditEvent[]
+}
+
+model Cart {
+  id             String        @id @default(cuid())
+  merchantId     String
+  buyerProfileId String
+  status         String        @default("OPEN")
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  merchant     Merchant      @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  buyerProfile BuyerProfile  @relation(fields: [buyerProfileId], references: [id], onDelete: Cascade)
+  items        CartItem[]
+  orders       Order[]
+
+  @@index([buyerProfileId, status])
+}
+
+model CartItem {
+  id        String   @id @default(cuid())
+  cartId    String
+  productId String
+  quantity  Int
+  unitPrice Decimal  @db.Decimal(10, 2)
+
+  cart    Cart    @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@unique([cartId, productId])
+}
+
+model Order {
+  id             String         @id @default(cuid())
+  cartId         String
+  merchantId     String
+  buyerProfileId String
+  total          Decimal        @db.Decimal(10, 2)
+  status         String         @default("CREATED")
+  createdAt      DateTime       @default(now())
+
+  cart         Cart          @relation(fields: [cartId], references: [id])
+  merchant     Merchant      @relation(fields: [merchantId], references: [id])
+  buyerProfile BuyerProfile  @relation(fields: [buyerProfileId], references: [id])
+  transaction  Transaction?
+
+  @@index([cartId, createdAt])
+}
+
+model Transaction {
+  id                String            @id @default(cuid())
+  orderId           String            @unique
+  merchantId        String
+  buyerProfileId    String
+  amount            Decimal           @db.Decimal(10, 2)
+  currency          String            @default("INR")
+  state             String            @default("CREATED")
+  razorpayOrderId   String?           @unique
+  razorpayPaymentId String?
+  razorpaySignature String?
+  attemptCount      Int               @default(0)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  order            Order             @relation(fields: [orderId], references: [id])
+  merchant         Merchant          @relation(fields: [merchantId], references: [id])
+  buyerProfile     BuyerProfile      @relation(fields: [buyerProfileId], references: [id])
+  recoveryAttempts RecoveryAttempt[]
+
+  @@index([state, createdAt])
+}
+
+model AgentDecision {
+  id             String          @id @default(cuid())
+  merchantId     String?
+  buyerProfileId String?
+  productId      String?
+  agent          String
+  decisionType   String
+  input          Json
+  decision       Json
+  rationale      Json?
+  createdAt      DateTime        @default(now())
+
+  merchant     Merchant?     @relation(fields: [merchantId], references: [id], onDelete: SetNull)
+  buyerProfile BuyerProfile? @relation(fields: [buyerProfileId], references: [id], onDelete: SetNull)
+  product      Product?      @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@index([agent, createdAt])
+}
+
+model Policy {
+  id                   String   @id @default(cuid())
+  name                 String   @unique
+  maxDiscountPercent   Decimal  @db.Decimal(5, 2)
+  maxAutomaticUpsell   Decimal  @db.Decimal(10, 2)
+  maxAutomaticRetry    Int
+  approvalThreshold    Decimal  @db.Decimal(10, 2)
+  merchantId           String
+
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+}
+
+model RecoveryAttempt {
+  id            String      @id @default(cuid())
+  transactionId String
+  attemptNumber Int
+  status        String
+  reason        String?
+  createdAt     DateTime    @default(now())
+
+  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+
+  @@unique([transactionId, attemptNumber])
+}
+
+model AuditEvent {
+  id             String        @id @default(cuid())
+  merchantId     String?
+  buyerProfileId String?
+  transactionId  String?
+  eventType      String
+  actor          String
+  input          Json?
+  action         String?
+  result         String?
+  reason         String?
+  policyResult   Json?
+  metadata       Json?
+  createdAt      DateTime      @default(now())
+
+  merchant     Merchant?     @relation(fields: [merchantId], references: [id], onDelete: SetNull)
+  buyerProfile BuyerProfile? @relation(fields: [buyerProfileId], references: [id], onDelete: SetNull)
+
+  @@index([eventType, createdAt])
+  @@index([transactionId, createdAt])
+}
+
+model SimulationScenario {
+  id        String             @id @default(cuid())
+  seed      Int
+  intent    Json
+  baseline  Json?
+  autopilot Json?
+  createdAt DateTime           @default(now())
+  result    SimulationResult?
+}
+
+model SimulationResult {
+  id                  String             @id @default(cuid())
+  scenarioId          String             @unique
+  baselineConversion  Float
+  autopilotConversion Float
+  baselineRevenue     Float
+  autopilotRevenue    Float
+  baselineAov         Float
+  autopilotAov        Float
+  upsellAcceptance    Float
+  recoveryRate        Float
+  policyBlocks        Int
+  unsafeProposals     Int
+  createdAt            DateTime           @default(now())
+
+  scenario SimulationScenario @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+}
